@@ -42,7 +42,7 @@ func (s *UserService) RestoreCache(ctx context.Context) error {
 }
 
 // GetOrder возвращает заказ по ID сначала из кэша, если в кэше нет то делает запрос к БД
-func (s *UserService) GetOrder(ctx context.Context, orderUID string) (*models.Order, error) {
+func (s *UserService) GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error) {
 	s.mu.RLock()
 	order, ok := s.cache[orderUID]
 	s.mu.RUnlock()
@@ -62,11 +62,11 @@ func (s *UserService) GetOrder(ctx context.Context, orderUID string) (*models.Or
 
 // GetOrderResponse возвращает структуру заказа заказа для пользователя без лишних полей
 func (s *UserService) GetOrderResponse(ctx context.Context, orderUID string) (*models.OrderResponse, error) {
-	order, err := s.GetOrder(ctx, orderUID)
+	order, err := s.GetOrderByUID(ctx, orderUID)
 	if err != nil {
 		return nil, err
 	}
-	return s.convertToOrderResponse(order), nil
+	return order.ConvertToOrderResponse(), nil
 }
 
 // CreateOrder сохраняет заказ в БД и кэш
@@ -80,38 +80,6 @@ func (s *UserService) CreateOrder(ctx context.Context, order *models.Order) erro
 	return nil
 }
 
-// convertToOrderResponse конвертирует Order в OrderResponse
-func (s *UserService) convertToOrderResponse(order *models.Order) *models.OrderResponse {
-	itemsResponse := make(models.ItemsResponse, len(order.Items))
-	for i, item := range order.Items {
-		itemsResponse[i] = models.ItemResponse{
-			TrackNumber: item.TrackNumber,
-			Price:       item.Price,
-			Name:        item.Name,
-			Sale:        item.Sale,
-			Size:        item.Size,
-			TotalPrice:  item.TotalPrice,
-			Brand:       item.Brand,
-		}
-	}
-
-	return &models.OrderResponse{
-		OrderUID:    order.OrderUID,
-		TrackNumber: order.TrackNumber,
-		Delivery:    order.Delivery,
-		Payment: models.PaymentResponse{
-			Currency:     order.Payment.Currency,
-			Provider:     order.Payment.Provider,
-			Amount:       order.Payment.Amount,
-			PaymentDt:    order.Payment.PaymentDt,
-			Bank:         order.Payment.Bank,
-			DeliveryCost: order.Payment.DeliveryCost,
-			GoodsTotal:   order.Payment.GoodsTotal,
-			CustomFee:    order.Payment.CustomFee,
-		},
-		Items:           itemsResponse,
-		Locale:          order.Locale,
-		DeliveryService: order.DeliveryService,
-		DateCreated:     order.DateCreated,
-	}
+func (s *UserService) SaveOrder(ctx context.Context, order *models.Order) error {
+	return s.CreateOrder(ctx, order)
 }
