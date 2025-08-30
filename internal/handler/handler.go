@@ -13,6 +13,7 @@ import (
 
 type Service interface {
 	GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error)
+	SaveOrder(ctx context.Context, order *models.Order) error
 }
 
 type UserHandler struct {
@@ -33,7 +34,10 @@ func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orderUID, ok := vars["uid"]
 	if !ok || orderUID == "" {
-		http.Error(w, "Missing order UID", http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"msg":    "Missing order UID",
+		})
 		return
 	}
 
@@ -41,18 +45,31 @@ func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 	order, err := h.service.GetOrderByUID(ctx, orderUID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			http.Error(w, "Order not found", http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{
+				"status": "error",
+				"msg":    "Order not found",
+			})
 			log.Printf("order with UID %s not found", orderUID)
 			return
 		}
 
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"status": "error",
+			"msg":    "Internal server error",
+		})
 		log.Printf("failed to retrieve order with UID %s: %v", orderUID, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(order)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "ok",
+		"data":   order,
+	})
 	log.Printf("order with UID %s retrieved successfully", orderUID)
+}
+
+func writeJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(payload)
 }

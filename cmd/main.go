@@ -18,7 +18,7 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	sqlDB := db.NewDB(cfg) // создаём *sql.DB
+	sqlDB := db.NewDB(cfg)
 	defer sqlDB.Close()
 
 	pgRepo := repo.NewRepo(sqlDB)

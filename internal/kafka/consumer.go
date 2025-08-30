@@ -33,7 +33,7 @@ func NewConsumer(cfg config.Config, service Service) (*Consumer, error) {
 		Topic:          cfg.Kafka.Topic,
 		MinBytes:       10e3,        // 10KB
 		MaxBytes:       10e6,        // 10MB
-		CommitInterval: time.Second, // авто-коммит каждую секунду
+		CommitInterval: time.Second, // Авто-коммит каждую секунду
 	})
 	logrus.WithFields(logrus.Fields{
 		"brokers": []string{brokerAddr},
@@ -50,7 +50,7 @@ func NewConsumer(cfg config.Config, service Service) (*Consumer, error) {
 	}, nil
 }
 
-// Close закрывает consumer
+// Закрывает consumer
 func (c *Consumer) Close() error {
 	if c.reader != nil {
 		err := c.reader.Close()

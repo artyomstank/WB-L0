@@ -33,7 +33,6 @@ func NewProducer(cfg config.Config) *Producer {
 		RequiredAcks: int(kafka.RequireAll),
 	})
 
-	// Таймаут можно вынести в конфиг, если нужно
 	to := 5 * time.Second
 
 	return &Producer{
@@ -89,81 +88,82 @@ func (p *Producer) RunProducer(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			// Генерируем тестовый заказ
-			order := p.GenerateTestOrder() // Нужно реализовать эту функцию
+			order := p.GenerateTestOrder()
 			err := p.SendOrders(ctx, order)
 			if err != nil {
 				logrus.WithError(err).Error("failed to send order")
 			}
 
 			// Пауза между отправками
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 		}
 	}
 }
+
 func (p *Producer) GenerateTestOrder() *models.Order {
 	now := time.Now()
+	uid := now.UnixNano() // Уникальные айдишники
 
 	return &models.Order{
-		OrderUID:          "test-" + fmt.Sprintf("%d", now.UnixNano()),
-		TrackNumber:       "WBILMTESTTRACK",
+		OrderUID:          fmt.Sprintf("test-%d", uid),
+		TrackNumber:       fmt.Sprintf("WBTRACK-%d", uid),
 		Entry:             "WBIL",
-		Locale:            "en",
+		Locale:            "ru",
 		InternalSignature: "",
-		CustomerID:        "test_customer",
-		DeliveryService:   "meest",
-		Shardkey:          "9",
+		CustomerID:        fmt.Sprintf("test_customer_%d", uid),
+		DeliveryService:   "DHL",
+		Shardkey:          "7",
 		SmID:              99,
 		DateCreated:       now,
 		OofShard:          "1",
 
 		Delivery: models.Delivery{
-			Name:    "Test Testov",
-			Phone:   "+9720000000",
-			Zip:     "2639809",
-			City:    "Kiryat Mozkin",
-			Address: "Ploshad Mira 15",
-			Region:  "Kraiot",
-			Email:   "test@gmail.com",
+			Name:    "Artem Mayorov",
+			Phone:   "+49590445501",
+			Zip:     "1235312",
+			City:    "Rostov",
+			Address: " Marksa 34a",
+			Region:  "Tula",
+			Email:   fmt.Sprintf("test+%d@gmail.com", uid), // Уникальный email
 		},
 
 		Payment: models.Payment{
-			Transaction:  "b563feb7b2b84b6test",
+			Transaction:  fmt.Sprintf("txn-%d", uid), // Уникальный transaction_id
 			RequestID:    "",
 			Currency:     "USD",
-			Provider:     "wbpay",
-			Amount:       1817,
-			Bank:         "alpha",
-			DeliveryCost: 1500,
-			GoodsTotal:   317,
+			Provider:     "gazprombank",
+			Amount:       1657,
+			Bank:         "sigma bank",
+			DeliveryCost: 1300,
+			GoodsTotal:   357,
 			CustomFee:    0,
 		},
 
 		Items: []models.Item{
 			{
-				ChrtID:      9934930,
-				TrackNumber: "WBILMTESTTRACK",
-				Price:       453,
-				Rid:         "ab4219087a764ae0btest",
-				Name:        "Mascaras",
-				Sale:        30,
+				ChrtID:      4321990,
+				TrackNumber: fmt.Sprintf("WBITEMTRACK-%d-1", uid),
+				Price:       250,
+				Rid:         fmt.Sprintf("rid-%d-1", uid),
+				Name:        "Glasses",
+				Sale:        25,
 				Size:        "0",
-				TotalPrice:  317,
-				NmID:        2389212,
-				Brand:       "Vivienne Sabo",
+				TotalPrice:  187,
+				NmID:        9291192,
+				Brand:       "Miu miu",
 				Status:      202,
 			},
 			{
-				ChrtID:      9934931,
-				TrackNumber: "WBILMTESTTRACK2",
+				ChrtID:      4321991,
+				TrackNumber: fmt.Sprintf("WBITEMTRACK-%d-2", uid),
 				Price:       200,
-				Rid:         "cd4219087a764ae0btest",
-				Name:        "Lipstick",
-				Sale:        10,
-				Size:        "1",
-				TotalPrice:  180,
-				NmID:        2389213,
-				Brand:       "Maybelline",
+				Rid:         fmt.Sprintf("rid-%d-2", uid),
+				Name:        "Cup",
+				Sale:        15,
+				Size:        "200ml",
+				TotalPrice:  170,
+				NmID:        1319901,
+				Brand:       "Expensive Cups",
 				Status:      202,
 			},
 		},

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -64,7 +65,7 @@ func LoadConfig() *Config {
 		Kafka: Kafka{
 			Host:  getEnv("KAFKA_HOST", "localhost"),
 			Port:  getEnvAsInt("KAFKA_PORT", 9092),
-			Topic: getEnv("KAFKA_TOPIC", "wb-tech-orders"),
+			Topic: getEnv("KAFKA_TOPIC", "wb-orders"),
 			Group: getEnv("KAFKA_GROUP", "wb-tech-demo-service"),
 		},
 	}
@@ -73,13 +74,11 @@ func LoadConfig() *Config {
 }
 
 // Получить строку подключения к БД
-func GetDBConnStr() string {
-	return "host=" + os.Getenv("DB_HOST") +
-		" port=" + os.Getenv("DB_PORT") +
-		" user=" + os.Getenv("DB_USER") +
-		" password=" + os.Getenv("DB_PASSWORD") +
-		" dbname=" + os.Getenv("DB_NAME") +
-		" sslmode=disable"
+func (p Postgres) GetDBConnStr() string {
+	return fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		p.Host, p.Port, p.User, p.Password, p.Database,
+	)
 }
 
 // вспомогательные функции подгрузки конфига

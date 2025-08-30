@@ -12,34 +12,33 @@ func (pgs *PostgresRepo) CreateOrder(ctx context.Context, order models.Order) er
 		return fmt.Errorf(" order_uid cannot be empty")
 	}
 
-	// открываем транзакцию
+	// Открываем транзакцию
 	tx, err := pgs.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// откат при ошибке
+	// Откат при ошибке
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				// zap.S().Errorf("rollback error: %v\n", rbErr) --добавить логи
 			}
 		}
 	}()
 
-	// создаём delivery запись (должна быть функция, которая делает INSERT и возвращает ID)
+	// Создаём delivery запись
 	deliveryID, err := pgs.CreateDeliveryTx(ctx, tx, order.Delivery)
 	if err != nil {
 		return fmt.Errorf("delivery creation error: %w", err)
 	}
 
-	// создаём payment запись
+	// Создаём payment запись
 	paymentID, err := pgs.CreatePaymentTx(ctx, tx, order.Payment)
 	if err != nil {
 		return fmt.Errorf("payment creation error: %w", err)
 	}
 
-	// вставляем сам order
+	// Вставляем саму модель order
 	query := `INSERT INTO orders (
 		order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, 
 		customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard
@@ -56,7 +55,7 @@ func (pgs *PostgresRepo) CreateOrder(ctx context.Context, order models.Order) er
 		return fmt.Errorf("order creation error: %w", err)
 	}
 
-	// вставляем все items
+	// Вставляем все items
 	for i, item := range order.Items {
 		_, err := pgs.CreateItemTx(ctx, tx, item, order.OrderUID)
 		if err != nil {
@@ -64,7 +63,7 @@ func (pgs *PostgresRepo) CreateOrder(ctx context.Context, order models.Order) er
 		}
 	}
 
-	// коммитим транзакцию
+	// Коммитим транзакцию
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -72,7 +71,7 @@ func (pgs *PostgresRepo) CreateOrder(ctx context.Context, order models.Order) er
 	return nil
 }
 
-// create запросы для транзакции CreateOrder
+// Create запросы для транзакции CreateOrder
 func (pgs *PostgresRepo) CreateDeliveryTx(ctx context.Context, tx *sql.Tx, del models.Delivery) (int, error) {
 	if del.Name == "" {
 		return 0, fmt.Errorf(" recipient name is required")
@@ -137,6 +136,7 @@ func (pgs *PostgresRepo) CreateItemTx(ctx context.Context, tx *sql.Tx, item mode
 	return id, nil
 }
 
+// Получаем заказ по uid
 func (pgs *PostgresRepo) GetOrder(ctx context.Context, orderUID string) (models.Order, error) {
 	var order models.Order
 	var deliveryID, paymentID int
@@ -174,6 +174,7 @@ func (pgs *PostgresRepo) GetOrder(ctx context.Context, orderUID string) (models.
 	return order, nil
 }
 
+// Get запросы для транзакции GetOrder
 func (pgs *PostgresRepo) GetDelivery(ctx context.Context, deliveryID int) (models.Delivery, error) {
 	var del models.Delivery
 
@@ -221,6 +222,8 @@ func (pgs *PostgresRepo) GetItemsByOrderUID(ctx context.Context, orderUID string
 	}
 	return items, nil
 }
+
+// Получить последние заказы для кэширования(количество задается в .env)
 func (pgs *PostgresRepo) GetLastOrders(ctx context.Context, lim int) ([]models.Order, error) {
 	query := `SELECT order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard FROM orders`
 	rows, err := pgs.DB.QueryContext(ctx, query)

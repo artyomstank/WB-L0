@@ -4,14 +4,26 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_USER: wb_tech_user
+      POSTGRES_USER: wb_user
       POSTGRES_PASSWORD: 12345678
-      POSTGRES_DB: wb_tech_demo_service
+      POSTGRES_DB: wb_demo_db
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+
+  migrate:
+    image: migrate/migrate
+    depends_on:
+      - postgres
+    volumes:
+      - ./migrations:/migrations
+    entrypoint: [
+      "migrate",
+      "-path", "/migrations",
+      "-database", "postgres://wb_user:12345678@postgres:5432/wb_demo_db?sslmode=disable"
+    ]
   kafka:
     image: bitnami/kafka:3.7
     environment:
@@ -40,14 +52,12 @@ services:
       - HTTP_PORT=8081
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_USER=wb_tech_user
+      - POSTGRES_USER=wb_user
       - POSTGRES_PASSWORD=12345678
-      - POSTGRES_DATABASE=wb_tech_demo_service
+      - POSTGRES_DATABASE=wb_demo_db
       - KAFKA_HOST=kafka
       - KAFKA_PORT=9092
-      - KAFKA_TOPIC=wb-tech-orders
       - KAFKA_GROUP=wb-tech-demo-service
-      - ORDERS_LIMIT=10
     ports:
       - "8081:8081"
 
@@ -57,11 +67,7 @@ services:
       dockerfile: Dockerfile.producer
     depends_on:
       - kafka
-    environment:
-      - KAFKA_HOST=kafka
-      - KAFKA_PORT=9092
-      - KAFKA_TOPIC=wb-tech-orders
-      - KAFKA_GROUP=wb-tech-demo-service
+
 
 volumes:
   pgdata:
