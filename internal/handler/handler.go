@@ -30,6 +30,7 @@ func (h *UserHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 
 var ErrNotFound = errors.New("order not found")
 
+// refactor cpntext
 func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orderUID, ok := vars["uid"]
@@ -41,7 +42,7 @@ func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
+	ctx := r.Context() //refactor
 	order, err := h.service.GetOrderByUID(ctx, orderUID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
