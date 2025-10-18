@@ -18,7 +18,7 @@ type Producer struct {
 	timeout time.Duration
 }
 
-func NewProducer(cfg config.Config) *Producer {
+func NewProducer(cfg config.Config) ProducerInterface {
 	// Собираем адрес брокера из Host + Port
 	brokerAddr := fmt.Sprintf("%s:%d", cfg.Kafka.Host, cfg.Kafka.Port)
 

@@ -11,19 +11,21 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wb_user -d wb_demo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   migrate:
     image: migrate/migrate
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - ./migrations:/migrations
-    entrypoint: [
-      "migrate",
-      "-path", "/migrations",
-      "-database", "postgres://wb_user:12345678@postgres:5432/wb_demo_db?sslmode=disable"
-    ]
+    command: ["-path", "/migrations", "-database", "postgres://wb_user:12345678@postgres:5432/wb_demo_db?sslmode=disable", "up"]
+
   kafka:
     image: bitnami/kafka:3.7
     environment:
@@ -31,22 +33,29 @@ services:
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
       - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CFG_LOG_DIRS=/tmp/kafka-logs
     ports:
       - "9092:9092"
     volumes:
       - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   wb-service:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       - HTTP_HOST=0.0.0.0
       - HTTP_PORT=8081
@@ -58,16 +67,28 @@ services:
       - KAFKA_HOST=kafka
       - KAFKA_PORT=9092
       - KAFKA_GROUP=wb-tech-demo-service
+      - KAFKA_TOPIC=wb-orders
+      - CACHE_STARTUP_SIZE=1000
+      - CACHE_TTL=30m
     ports:
       - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   wb-producer:
     build:
       context: .
       dockerfile: Dockerfile.producer
     depends_on:
-      - kafka
-
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - KAFKA_TOPIC=wb-orders
 
 volumes:
   pgdata:

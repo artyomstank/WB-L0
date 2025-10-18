@@ -2,65 +2,54 @@ package service
 
 import (
 	"L0-wb/config"
+	"L0-wb/internal/cache"
 	"L0-wb/internal/models"
 	"L0-wb/internal/repo"
 	"context"
-	"sync"
+	"fmt"
 )
 
 type UserService struct {
-	UserRepo *repo.PostgresRepo
-	cache    map[string]*models.Order
-	mu       sync.RWMutex
+	UserRepo repo.Repository
+	cache    cache.Cache
 }
 
-func NewService(ur *repo.PostgresRepo) (*UserService, error) {
+func NewService(ur repo.Repository) (Service, error) {
+	maxSize := config.GetCacheStartupSize()
 	s := &UserService{
 		UserRepo: ur,
-		cache:    make(map[string]*models.Order),
+		cache:    cache.NewCache(maxSize),
 	}
+
 	if err := s.RestoreCache(context.Background()); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to restore cache: %w", err)
 	}
+
 	return s, nil
 }
 
-// загрузка кэша из БД
-func (s *UserService) RestoreCache(ctx context.Context) error {
-	last_order_quantity := config.GetLimitCache()
-	orders, err := s.UserRepo.GetLastOrders(ctx, last_order_quantity)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, order := range orders {
-		orderCopy := order
-		s.cache[order.OrderUID] = &orderCopy
-	}
-	return nil
-}
-
-// GetOrder возвращает заказ по ID сначала из кэша, если в кэше нет то делает запрос к БД
 func (s *UserService) GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error) {
-	s.mu.RLock()
-	order, ok := s.cache[orderUID]
-	s.mu.RUnlock()
-	if ok {
+	if orderUID == "" {
+		return nil, fmt.Errorf("order_uid cannot be empty")
+	}
+
+	// Check cache first
+	if order, found := s.cache.Get(orderUID); found {
 		return order, nil
 	}
+
+	// Get from DB if not in cache
 	orderDB, err := s.UserRepo.GetOrder(ctx, orderUID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get order: %w", err)
 	}
-	s.mu.Lock()
-	orderCopy := orderDB
-	s.cache[orderUID] = &orderCopy
-	s.mu.Unlock()
-	return &orderCopy, nil
+
+	// Save to cache
+	s.cache.Set(orderUID, &orderDB)
+
+	return &orderDB, nil
 }
 
-// GetOrderResponse возвращает структуру заказа заказа для пользователя без лишних полей
 func (s *UserService) GetOrderResponse(ctx context.Context, orderUID string) (*models.OrderResponse, error) {
 	order, err := s.GetOrderByUID(ctx, orderUID)
 	if err != nil {
@@ -69,17 +58,40 @@ func (s *UserService) GetOrderResponse(ctx context.Context, orderUID string) (*m
 	return order.ConvertToOrderResponse(), nil
 }
 
-// CreateOrder сохраняет заказ в БД и кэш
 func (s *UserService) CreateOrder(ctx context.Context, order *models.Order) error {
-	if err := s.UserRepo.CreateOrder(ctx, *order); err != nil {
-		return err
+	if err := order.Validate(); err != nil {
+		return fmt.Errorf("invalid order: %w", err)
 	}
-	s.mu.Lock()
-	s.cache[order.OrderUID] = order
-	s.mu.Unlock()
+
+	if err := s.UserRepo.CreateOrder(ctx, *order); err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
+
+	s.cache.Set(order.OrderUID, order)
 	return nil
 }
 
 func (s *UserService) SaveOrder(ctx context.Context, order *models.Order) error {
 	return s.CreateOrder(ctx, order)
+}
+
+func (s *UserService) RestoreCache(ctx context.Context) error {
+	lastOrderQuantity := config.GetLimitCache()
+	orders, err := s.UserRepo.GetLastOrders(ctx, lastOrderQuantity)
+	if err != nil {
+		return fmt.Errorf("failed to restore cache: %w", err)
+	}
+
+	for _, order := range orders {
+		orderCopy := order
+		s.cache.Set(order.OrderUID, &orderCopy)
+	}
+	return nil
+}
+
+func (s *UserService) Close() error {
+	if s.cache != nil {
+		s.cache.Close()
+	}
+	return nil
 }

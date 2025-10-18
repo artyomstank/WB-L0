@@ -70,6 +70,10 @@ func LoadConfig() *Config {
 		},
 	}
 
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
 	return cfg
 }
 
@@ -116,4 +120,39 @@ func getEnvAsDuration(key string, defaultVal time.Duration) time.Duration {
 		log.Printf("не удалось преобразовать %s=%s в значение длительности, используется значение по умолчанию %s", key, valStr, defaultVal)
 	}
 	return defaultVal
+}
+
+func GetCacheStartupSize() int {
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using environment variables")
+	}
+
+	sizeStr := os.Getenv("CACHE_STARTUP_SIZE")
+	if sizeStr == "" {
+		return 1000 // Default size if not specified
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		log.Printf("Warning: invalid CACHE_STARTUP_SIZE value: %s, using default", sizeStr)
+		return 1000
+	}
+
+	return size
+}
+
+func (c *Config) Validate() error {
+	if c.HTTPServer.Port <= 0 {
+		return fmt.Errorf("invalid HTTP port: %d", c.HTTPServer.Port)
+	}
+	if c.Postgres.Port <= 0 {
+		return fmt.Errorf("invalid PostgreSQL port: %d", c.Postgres.Port)
+	}
+	if c.Kafka.Port <= 0 {
+		return fmt.Errorf("invalid Kafka port: %d", c.Kafka.Port)
+	}
+	if c.Cache.StartupSize <= 0 {
+		return fmt.Errorf("invalid cache startup size: %d", c.Cache.StartupSize)
+	}
+	return nil
 }

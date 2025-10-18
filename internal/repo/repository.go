@@ -10,7 +10,7 @@ type PostgresRepo struct {
 }
 
 // Конструктор PostgresRepo
-func NewRepo(db *sql.DB) *PostgresRepo {
+func NewRepo(db *sql.DB) Repository {
 	return &PostgresRepo{DB: db}
 }
 

@@ -1,8 +1,7 @@
 package handler
 
 import (
-	"L0-wb/internal/models"
-	"context"
+	"L0-wb/internal/service"
 	"encoding/json"
 	"errors"
 	"log"
@@ -11,16 +10,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Service interface {
-	GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error)
-	SaveOrder(ctx context.Context, order *models.Order) error
-}
-
 type UserHandler struct {
-	service Service
+	service service.Service
 }
 
-func NewHandler(service Service) *UserHandler {
+func NewHandler(service service.Service) Handler {
 	return &UserHandler{service: service}
 }
 
@@ -73,4 +67,10 @@ func writeJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func (h *UserHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "ok",
+	})
 }

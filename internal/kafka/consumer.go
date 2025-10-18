@@ -26,7 +26,7 @@ type Consumer struct {
 }
 
 // NewConsumer создаёт Kafka consumer
-func NewConsumer(cfg config.Config, service Service) (*Consumer, error) {
+func NewConsumer(cfg config.Config, service MessageProcessor) (ConsumerInterface, error) {
 	brokerAddr := fmt.Sprintf("%s:%d", cfg.Kafka.Host, cfg.Kafka.Port)
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        []string{brokerAddr},
@@ -64,47 +64,47 @@ func (c *Consumer) Close() error {
 	return nil
 }
 
-// ConsumeMessages слушает Kafka и обрабатывает сообщения
-func (c *Consumer) ConsumeMessages(ctx context.Context) {
+// Меняем сигнатуру метода чтобы возвращать ошибку
+func (c *Consumer) ConsumeMessages(ctx context.Context) error {
 	logrus.Infof("Старт чтения сообщений из Kafka (topic: %s)", c.topic)
 	for {
-		if ctx.Err() != nil {
-			logrus.Info("consumer stopped by context")
-			return
-		}
-		m, err := c.reader.ReadMessage(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				logrus.Info("consumer stopped by context")
-				return
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			m, err := c.reader.ReadMessage(ctx)
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				logrus.WithError(err).Error("read message error")
+				time.Sleep(time.Second)
+				continue
 			}
-			logrus.WithError(err).Error("read message error")
-			time.Sleep(time.Second)
-			continue
-		}
 
-		var order models.Order
-		if err := json.Unmarshal(m.Value, &order); err != nil {
-			logrus.WithError(err).Errorf("unmarshal order error, raw message: %s", string(m.Value))
-			continue
-		}
+			var order models.Order
+			if err := json.Unmarshal(m.Value, &order); err != nil {
+				logrus.WithError(err).Errorf("unmarshal order error, raw message: %s", string(m.Value))
+				continue
+			}
 
-		if order.OrderUID == "" {
-			logrus.Errorf("invalid order: missing order_uid. raw message: %s", string(m.Value))
-			continue
-		}
+			if order.OrderUID == "" {
+				logrus.Errorf("invalid order: missing order_uid. raw message: %s", string(m.Value))
+				continue
+			}
 
-		// Отправляем заказ в сервисный слой
-		if err := c.service.SaveOrder(ctx, &order); err != nil {
-			logrus.WithError(err).Errorf("failed to save order %s", order.OrderUID)
-		} else {
-			logrus.Infof("order %s saved successfully", order.OrderUID)
-		}
+			// Отправляем заказ в сервисный слой
+			if err := c.service.SaveOrder(ctx, &order); err != nil {
+				logrus.WithError(err).Errorf("failed to save order %s", order.OrderUID)
+			} else {
+				logrus.Infof("order %s saved successfully", order.OrderUID)
+			}
 
-		logrus.WithFields(logrus.Fields{
-			"partition": m.Partition,
-			"offset":    m.Offset,
-			"order_uid": order.OrderUID,
-		}).Info("message processed")
+			logrus.WithFields(logrus.Fields{
+				"partition": m.Partition,
+				"offset":    m.Offset,
+				"order_uid": order.OrderUID,
+			}).Info("message processed")
+		}
 	}
 }

@@ -9,10 +9,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func NewServer(cfg *config.Config, h *UserHandler) *http.Server {
+func NewServer(cfg *config.Config, h Handler) *http.Server {
 	router := mux.NewRouter()
 	//Middleware для CORS
 	router.Use(corsMiddleware)
+	// Health check endpoint
+	router.HandleFunc("/health", h.HealthCheck).Methods(http.MethodGet)
 	// API ручка
 	router.HandleFunc("/order/{uid}", h.GetOrderByUID).Methods(http.MethodGet)
 
