@@ -4,8 +4,8 @@ import (
 	"L0-wb/internal/service"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -15,7 +15,9 @@ type UserHandler struct {
 }
 
 func NewHandler(service service.Service) Handler {
-	return &UserHandler{service: service}
+	return &UserHandler{
+		service: service,
+	}
 }
 
 func (h *UserHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
@@ -24,35 +26,42 @@ func (h *UserHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 
 var ErrNotFound = errors.New("order not found")
 
-// refactor cpntext
 func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orderUID, ok := vars["uid"]
-	if !ok || orderUID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{
 			"status": "error",
 			"msg":    "Missing order UID",
 		})
 		return
 	}
 
-	ctx := r.Context() //refactor
+	// Убираем пробелы с начала и конца
+	orderUID = strings.TrimSpace(orderUID)
+	if orderUID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"msg":    "Order UID cannot be empty",
+		})
+		return
+	}
+
+	ctx := r.Context()
 	order, err := h.service.GetOrderByUID(ctx, orderUID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]interface{}{
-				"status": "error",
-				"msg":    "Order not found",
-			})
-			log.Printf("order with UID %s not found", orderUID)
-			return
+		status := http.StatusInternalServerError
+		msg := "Internal server error"
+
+		if errors.Is(err, service.ErrNotFound) {
+			status = http.StatusNotFound
+			msg = "Order not found"
 		}
 
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+		writeJSON(w, status, map[string]interface{}{
 			"status": "error",
-			"msg":    "Internal server error",
+			"msg":    msg,
 		})
-		log.Printf("failed to retrieve order with UID %s: %v", orderUID, err)
 		return
 	}
 
@@ -60,7 +69,6 @@ func (h *UserHandler) GetOrderByUID(w http.ResponseWriter, r *http.Request) {
 		"status": "ok",
 		"data":   order,
 	})
-	log.Printf("order with UID %s retrieved successfully", orderUID)
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload interface{}) {

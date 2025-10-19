@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"L0-wb/internal/generator"
+
 	"github.com/segmentio/kafka-go"
 	"github.com/sirupsen/logrus"
 )
@@ -101,71 +103,5 @@ func (p *Producer) RunProducer(ctx context.Context) error {
 }
 
 func (p *Producer) GenerateTestOrder() *models.Order {
-	now := time.Now()
-	uid := now.UnixNano() // Уникальные айдишники
-
-	return &models.Order{
-		OrderUID:          fmt.Sprintf("test-%d", uid),
-		TrackNumber:       fmt.Sprintf("WBTRACK-%d", uid),
-		Entry:             "WBIL",
-		Locale:            "ru",
-		InternalSignature: "",
-		CustomerID:        fmt.Sprintf("test_customer_%d", uid),
-		DeliveryService:   "DHL",
-		Shardkey:          "7",
-		SmID:              99,
-		DateCreated:       now,
-		OofShard:          "1",
-
-		Delivery: models.Delivery{
-			Name:    "Artem Mayorov",
-			Phone:   "+49590445501",
-			Zip:     "1235312",
-			City:    "Rostov",
-			Address: " Marksa 34a",
-			Region:  "Tula",
-			Email:   fmt.Sprintf("test+%d@gmail.com", uid), // Уникальный email
-		},
-
-		Payment: models.Payment{
-			Transaction:  fmt.Sprintf("txn-%d", uid), // Уникальный transaction_id
-			RequestID:    "",
-			Currency:     "USD",
-			Provider:     "gazprombank",
-			Amount:       1657,
-			Bank:         "sigma bank",
-			DeliveryCost: 1300,
-			GoodsTotal:   357,
-			CustomFee:    0,
-		},
-
-		Items: []models.Item{
-			{
-				ChrtID:      4321990,
-				TrackNumber: fmt.Sprintf("WBITEMTRACK-%d-1", uid),
-				Price:       250,
-				Rid:         fmt.Sprintf("rid-%d-1", uid),
-				Name:        "Glasses",
-				Sale:        25,
-				Size:        "0",
-				TotalPrice:  187,
-				NmID:        9291192,
-				Brand:       "Miu miu",
-				Status:      202,
-			},
-			{
-				ChrtID:      4321991,
-				TrackNumber: fmt.Sprintf("WBITEMTRACK-%d-2", uid),
-				Price:       200,
-				Rid:         fmt.Sprintf("rid-%d-2", uid),
-				Name:        "Cup",
-				Sale:        15,
-				Size:        "200ml",
-				TotalPrice:  170,
-				NmID:        1319901,
-				Brand:       "Expensive Cups",
-				Status:      202,
-			},
-		},
-	}
+	return generator.GenerateOrder()
 }

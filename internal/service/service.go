@@ -6,8 +6,12 @@ import (
 	"L0-wb/internal/models"
 	"L0-wb/internal/repo"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type UserService struct {
 	UserRepo repo.Repository
@@ -41,6 +45,9 @@ func (s *UserService) GetOrderByUID(ctx context.Context, orderUID string) (*mode
 	// Get from DB if not in cache
 	orderDB, err := s.UserRepo.GetOrder(ctx, orderUID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound // Убедимся, что возвращаем правильную ошибку
+		}
 		return nil, fmt.Errorf("failed to get order: %w", err)
 	}
 

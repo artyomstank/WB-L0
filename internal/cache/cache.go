@@ -2,126 +2,80 @@ package cache
 
 import (
 	"L0-wb/internal/models"
+	"container/list"
 	"sync"
-	"time"
 )
 
-// Cache defines interface for caching operations
+type cacheItem struct {
+	key   string
+	value *models.Order
+}
+
 type Cache interface {
 	Set(key string, order *models.Order)
 	Get(key string) (*models.Order, bool)
 	Close()
 }
 
-const (
-	defaultMaxSize       = 1000
-	defaultCleanupPeriod = 5 * time.Minute
-	defaultTTL           = 30 * time.Minute
-)
-
-type cacheEntry struct {
-	order      *models.Order
-	lastAccess time.Time
+type lruCache struct {
+	capacity int
+	items    map[string]*list.Element
+	queue    *list.List
+	mutex    sync.RWMutex
 }
 
-// InMemoryCache implements Cache interface
-type InMemoryCache struct {
-	data        map[string]cacheEntry
-	mu          sync.RWMutex
-	maxSize     int
-	ttl         time.Duration
-	stopCleanup chan struct{}
-}
-
-func NewCache(maxSize int) Cache {
-	if maxSize <= 0 {
-		maxSize = defaultMaxSize
-	}
-
-	c := &InMemoryCache{
-		data:        make(map[string]cacheEntry),
-		maxSize:     maxSize,
-		ttl:         defaultTTL,
-		stopCleanup: make(chan struct{}),
-	}
-
-	go c.startCleanup()
-	return c
-}
-
-func (c *InMemoryCache) startCleanup() {
-	ticker := time.NewTicker(defaultCleanupPeriod)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			c.cleanup()
-		case <-c.stopCleanup:
-			return
-		}
+func NewCache(capacity int) Cache {
+	return &lruCache{
+		capacity: capacity,
+		items:    make(map[string]*list.Element),
+		queue:    list.New(),
 	}
 }
 
-func (c *InMemoryCache) cleanup() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *lruCache) Set(key string, order *models.Order) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	now := time.Now()
-	for key, entry := range c.data {
-		if now.Sub(entry.lastAccess) > c.ttl {
-			delete(c.data, key)
-		}
+	if elem, exists := c.items[key]; exists {
+		c.queue.MoveToFront(elem)
+		elem.Value.(*cacheItem).value = order
+		return
 	}
-}
 
-func (c *InMemoryCache) Set(key string, order *models.Order) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// Add new item
+	item := &cacheItem{key: key, value: order}
+	elem := c.queue.PushFront(item)
+	c.items[key] = elem
 
-	if len(c.data) >= c.maxSize {
+	// Evict if over capacity
+	if c.queue.Len() > c.capacity {
 		c.evictOldest()
 	}
+}
 
-	c.data[key] = cacheEntry{
-		order:      order,
-		lastAccess: time.Now(),
+func (c *lruCache) Get(key string) (*models.Order, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if elem, exists := c.items[key]; exists {
+		c.queue.MoveToFront(elem)
+		return elem.Value.(*cacheItem).value, true
+	}
+	return nil, false
+}
+
+func (c *lruCache) evictOldest() {
+	if elem := c.queue.Back(); elem != nil {
+		c.queue.Remove(elem)
+		item := elem.Value.(*cacheItem)
+		delete(c.items, item.key)
 	}
 }
 
-func (c *InMemoryCache) Get(key string) (*models.Order, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *lruCache) Close() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	entry, exists := c.data[key]
-	if !exists {
-		return nil, false
-	}
-
-	entry.lastAccess = time.Now()
-	c.data[key] = entry
-
-	return entry.order, true
-}
-
-func (c *InMemoryCache) evictOldest() {
-	var oldestKey string
-	var oldestAccess time.Time
-	first := true
-
-	for key, entry := range c.data {
-		if first || entry.lastAccess.Before(oldestAccess) {
-			oldestKey = key
-			oldestAccess = entry.lastAccess
-			first = false
-		}
-	}
-
-	if oldestKey != "" {
-		delete(c.data, oldestKey)
-	}
-}
-
-func (c *InMemoryCache) Close() {
-	close(c.stopCleanup)
+	c.items = nil
+	c.queue = nil
 }

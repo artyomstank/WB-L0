@@ -8,7 +8,7 @@ KAFKA_PORT ?= 9092
 KAFKA_TOPIC ?= wb-orders
 KAFKA_GROUP ?= wb-tech-demo-service
 
-.PHONY: up down build logs ps create-topic list-topics describe-topic delete-topic restart clean
+.PHONY: up down build logs ps create-topic list-topics describe-topic delete-topic restart clean test test-coverage generate-mocks
 
 # Docker compose commands
 up:
@@ -68,3 +68,24 @@ start-producer:
 
 stop-producer:
 	$(DOCKER_COMPOSE) stop wb-producer
+
+#Postgres
+list-tables:
+	$(DOCKER_COMPOSE) exec postgres psql -U wb_user -d wb_demo_db -c "\dt"
+view-f5:
+	$(DOCKER_COMPOSE) exec postgres psql -U wb_user -d wb_demo_db -c "SELECT * FROM $(TABLE) LIMIT 5;"
+
+# Testing
+.PHONY: test test-coverage generate-mocks
+
+test:
+	go test -v ./...
+
+test-coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+generate-mocks:
+	mockgen -source=internal/repo/repository_interface.go -destination=internal/mocks/mock_repository.go -package=mocks
+	mockgen -source=internal/service/service_interface.go -destination=internal/mocks/mock_service.go -package=mocks
+	mockgen -source=internal/cache/cache.go -destination=internal/mocks/mock_cache.go -package=mocks

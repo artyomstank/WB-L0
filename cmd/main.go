@@ -35,6 +35,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize service: %v", err)
 	}
+	defer func() {
+		if err := svc.Close(); err != nil {
+			log.Printf("error closing service: %v", err)
+		}
+	}()
 
 	h := handler.NewHandler(svc)
 
@@ -74,13 +79,17 @@ func main() {
 	defer shutdownCancel()
 
 	if err := cons.Close(); err != nil {
-		log.Printf("Error stopping consumer: %v", err)
+		log.Printf("error stopping consumer: %v", err)
 	}
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Error stopping server: %v", err)
+		log.Printf("error stopping server: %v", err)
 	}
 
-	cancel() // Отменяем основной контекст
-	log.Println("Shutdown complete")
+	if err := pgRepo.Close(); err != nil {
+		log.Printf("error closing repository: %v", err)
+	}
+
+	cancel()
+	log.Println("shutdown complete")
 }
